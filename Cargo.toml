@@ -1,0 +1,6 @@
+[package]
+name = "gitters"
+version = "0.1.0"
+authors = ["Avik Das <avik.das@berkeley.edu>"]
+
+[dependencies]
