@@ -35,26 +35,25 @@ struct Args {
     arg_object: String
 }
 
-fn bool_to_yn(b: bool) -> &'static str {
-    if b { "Y" } else { "N" }
-}
-
 fn main() {
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| d.decode())
         .unwrap_or_else(|e| e.exit());
 
-    println!("flags: t = {}, s = {}, e = {}, p = {}",
-             bool_to_yn(args.flag_t), bool_to_yn(args.flag_s),
-             bool_to_yn(args.flag_e), bool_to_yn(args.flag_p));
-
-    // TODO Steps:
-    // 1. Resolve revision -> error if invalid
-    // 2. Read header if t, s or e. Read entire object if p -> error if unable to
-    // 3. Print type, size or entire object as necessary.
-
     let name = revisions::resolve(&args.arg_object).unwrap();
     let header = objects::read_header(&name).unwrap();
 
-    println!("{:?}", header);
+    if args.flag_t {
+        let object_type = match header.object_type {
+            objects::Type::Blob => "blob",
+            objects::Type::Tree => "tree",
+            objects::Type::Commit => "commit",
+        };
+        println!("{}", object_type);
+    } else if args.flag_s {
+        println!("{}", header.content_length);
+    } else {
+        // TODO
+        println!("{:?}", header);
+    }
 }

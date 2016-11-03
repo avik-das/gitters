@@ -1,11 +1,16 @@
 /// Provides functionality for reading writing the objects that make up the content-addressable
 /// database that is git.
 
+use flate2::read::ZlibDecoder;
 use std::env;
 use std::error;
+use std::error::Error as StdError;
 use std::fmt;
+use std::fs::File;
 use std::io;
+use std::io::prelude::Read;
 use std::path;
+use std::str;
 
 /// An object name, which must be a 40-byte hexadecimal string containing the SHA-1 of the object
 /// being referenced. It is expected that such an object name is constructed either when the object
@@ -36,12 +41,14 @@ pub struct Header {
 #[derive(Debug)]
 pub enum Error {
     IOError(io::Error),
+    InvalidFile(String),
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Error::IOError(ref err) => write!(f, "IO error: {}", err),
+            Error::InvalidFile(ref description) => write!(f, "invalid file: {}", description),
         }
     }
 }
@@ -50,15 +57,19 @@ impl error::Error for Error {
     fn description(&self) -> &str {
         match *self {
             Error::IOError(ref err) => err.description(),
+            Error::InvalidFile(ref description) => description,
         }
     }
 
     fn cause(&self) -> Option<&error::Error> {
         match *self {
             Error::IOError(ref err) => Some(err),
+            ref err => Some(err)
         }
     }
 }
+
+struct ParsedAndRest<T>(T, Vec<u8>);
 
 fn get_object_path(name: &ObjectName) -> Result<path::PathBuf, Error> {
     let cwd = try!(env::current_dir().map_err(|e| Error::IOError(e)));
@@ -70,8 +81,50 @@ fn get_object_path(name: &ObjectName) -> Result<path::PathBuf, Error> {
        .join(file))
 }
 
+fn read_type(contents: &Vec<u8>) -> Result<ParsedAndRest<Type>, Error> {
+    let mut split = contents.splitn(2, |c| (*c as char) == ' ');
+
+    let type_array =
+        try!(split.next().ok_or(Error::InvalidFile("unable to read header".to_string())));
+    let type_str = try!(str::from_utf8(type_array)
+                        .map_err(|e| Error::InvalidFile(e.description().to_string())));
+    let object_type = try!(match type_str {
+        "blob" => Ok(Type::Blob),
+        "tree" => Ok(Type::Tree),
+        "commit" => Ok(Type::Commit),
+        value => Err(Error::InvalidFile(format!("invalid type: {}", value))),
+    });
+
+    let rest = try!(split.next().ok_or(Error::InvalidFile("unable to read header".to_string())));
+
+    Ok(ParsedAndRest(object_type, rest.to_vec()))
+}
+
+fn read_size(contents: &Vec<u8>) -> Result<ParsedAndRest<u64>, Error> {
+    let mut split = contents.splitn(2, |c| (*c as char) == '\0');
+
+    let size_array =
+        try!(split.next().ok_or(Error::InvalidFile("unable to read header".to_string())));
+    let size_str = try!(str::from_utf8(size_array)
+                        .map_err(|e| Error::InvalidFile(e.description().to_string())));
+    let size = try!(size_str.parse::<u64>()
+                    .map_err(|e| Error::InvalidFile(e.description().to_string())));
+
+    let rest = try!(split.next().ok_or(Error::InvalidFile("unable to read header".to_string())));
+
+    Ok(ParsedAndRest(size, rest.to_vec()))
+}
+
 pub fn read_header(name: &ObjectName) -> Result<Header, Error> {
-    let path = get_object_path(name);
-    println!("path: {:?}", path);
-    Ok(Header { object_type: Type::Blob, content_length: 100 })
+    let path = try!(get_object_path(name));
+
+    // read file
+    let file = try!(File::open(path.as_path()).map_err(|e| Error::IOError(e)));
+    let mut decoder = ZlibDecoder::new(file);
+    let mut buffer = Vec::new();
+    try!(decoder.read_to_end(&mut buffer).map_err(|e| Error::IOError(e)));
+
+    let ParsedAndRest(object_type, rest) = try!(read_type(&buffer));
+    let ParsedAndRest(size, _) = try!(read_size(&rest));
+    Ok(Header { object_type: object_type, content_length: size })
 }
