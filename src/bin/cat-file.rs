@@ -4,6 +4,7 @@ extern crate rustc_serialize;
 extern crate docopt;
 
 use docopt::Docopt;
+use gitters::objects;
 use gitters::revisions;
 
 const USAGE: &'static str = "
@@ -52,8 +53,8 @@ fn main() {
     // 2. Read header if t, s or e. Read entire object if p -> error if unable to
     // 3. Print type, size or entire object as necessary.
 
-    match revisions::resolve(&args.arg_object) {
-        Ok(rev) => gitters::cat_file(&rev),
-        Err(err) => println!("{}", err),
-    }
+    let name = revisions::resolve(&args.arg_object).unwrap();
+    let header = objects::read_header(&name).unwrap();
+
+    println!("{:?}", header);
 }
