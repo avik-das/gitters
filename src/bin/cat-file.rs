@@ -4,6 +4,7 @@ extern crate rustc_serialize;
 extern crate docopt;
 
 use docopt::Docopt;
+use gitters::revisions;
 
 const USAGE: &'static str = "
 cat-file
@@ -45,5 +46,14 @@ fn main() {
     println!("flags: t = {}, s = {}, e = {}, p = {}",
              bool_to_yn(args.flag_t), bool_to_yn(args.flag_s),
              bool_to_yn(args.flag_e), bool_to_yn(args.flag_p));
-    gitters::cat_file(&args.arg_object);
+
+    // TODO Steps:
+    // 1. Resolve revision -> error if invalid
+    // 2. Read header if t, s or e. Read entire object if p -> error if unable to
+    // 3. Print type, size or entire object as necessary.
+
+    match revisions::resolve(&args.arg_object) {
+        Ok(rev) => gitters::cat_file(rev),
+        Err(err) => println!("{}", err),
+    }
 }
