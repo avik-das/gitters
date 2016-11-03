@@ -6,7 +6,7 @@ use std::error;
 use std::fmt;
 use regex::Regex;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum RevisionError {
     /// Currently the only error is a generic "this revision is invalid" error. As we try to handle
     /// more types of revisions, we'll have more specific errors that can occur.
