@@ -53,7 +53,7 @@ fn main() {
     // 3. Print type, size or entire object as necessary.
 
     match revisions::resolve(&args.arg_object) {
-        Ok(rev) => gitters::cat_file(rev),
+        Ok(rev) => gitters::cat_file(&rev),
         Err(err) => println!("{}", err),
     }
 }

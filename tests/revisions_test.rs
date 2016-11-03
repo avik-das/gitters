@@ -1,11 +1,12 @@
 extern crate gitters;
 
+use gitters::objects;
 use gitters::revisions;
 
 #[test]
 fn full_sha1_resolves_to_self() {
     assert_eq!(
-        Ok("4ddb0025ef5914b51fb835495f5259a6d962df21"),
+        Ok(objects::ObjectName("4ddb0025ef5914b51fb835495f5259a6d962df21".to_string())),
         revisions::resolve("4ddb0025ef5914b51fb835495f5259a6d962df21"));
 }
 

@@ -5,6 +5,7 @@
 use std::error;
 use std::fmt;
 use regex::Regex;
+use objects;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum RevisionError {
@@ -38,7 +39,7 @@ impl error::Error for RevisionError {
 /// Given a revision as outlined in gitrevisions(7), resolve it to a canonical, 40-byte SHA-1
 /// object name. The process of resolving a revision may require going to the filesystem to look up
 /// objects and refs.
-pub fn resolve(rev: &str) -> Result<&str, RevisionError> {
+pub fn resolve(rev: &str) -> Result<objects::ObjectName, RevisionError> {
     lazy_static! {
         static ref FULL_SHA1_REGEX: Regex = Regex::new(r"^[0-9a-f]{40}$").unwrap();
     }
@@ -46,7 +47,7 @@ pub fn resolve(rev: &str) -> Result<&str, RevisionError> {
     // Currently, only support full SHA-1s, so all we have to do is check that we have the correct
     // format, and then return it.
     if FULL_SHA1_REGEX.is_match(rev) {
-        return Ok(rev);
+        return Ok(objects::ObjectName(rev.to_string()));
     }
 
     Err(RevisionError::InvalidRevision)
