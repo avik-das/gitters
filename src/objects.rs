@@ -69,8 +69,6 @@ impl error::Error for Error {
     }
 }
 
-struct ParsedAndRest<T>(T, Vec<u8>);
-
 fn get_object_path(name: &ObjectName) -> Result<path::PathBuf, Error> {
     let cwd = try!(env::current_dir().map_err(|e| Error::IOError(e)));
     let ObjectName(ref sha1) = *name;
@@ -81,13 +79,29 @@ fn get_object_path(name: &ObjectName) -> Result<path::PathBuf, Error> {
        .join(file))
 }
 
-fn read_type(contents: &Vec<u8>) -> Result<ParsedAndRest<Type>, Error> {
-    let mut split = contents.splitn(2, |c| (*c as char) == ' ');
+fn invalid_header_error() -> Error {
+    Error::InvalidFile("unable to read header".to_string())
+}
 
-    let type_array =
-        try!(split.next().ok_or(Error::InvalidFile("unable to read header".to_string())));
-    let type_str = try!(str::from_utf8(type_array)
-                        .map_err(|e| Error::InvalidFile(e.description().to_string())));
+fn std_error_to_objects_error<T>(e: T) -> Error
+        where T: error::Error {
+    Error::InvalidFile(e.description().to_string())
+}
+
+fn read_until(contents: &Vec<u8>, until: char) -> Result<(&str, Vec<u8>), Error> {
+    let mut split = contents.splitn(2, |c| (*c as char) == until);
+
+    let read = try!(split.next().ok_or(invalid_header_error()));
+    let parsed = try!(str::from_utf8(read).map_err(std_error_to_objects_error));
+
+    let rest = try!(split.next().ok_or(invalid_header_error()));
+
+    Ok((parsed, rest.to_vec()))
+}
+
+fn read_type(contents: &Vec<u8>) -> Result<(Type, Vec<u8>), Error> {
+    let (type_str, rest) = try!(read_until(contents, ' '));
+
     let object_type = try!(match type_str {
         "blob" => Ok(Type::Blob),
         "tree" => Ok(Type::Tree),
@@ -95,24 +109,16 @@ fn read_type(contents: &Vec<u8>) -> Result<ParsedAndRest<Type>, Error> {
         value => Err(Error::InvalidFile(format!("invalid type: {}", value))),
     });
 
-    let rest = try!(split.next().ok_or(Error::InvalidFile("unable to read header".to_string())));
-
-    Ok(ParsedAndRest(object_type, rest.to_vec()))
+    Ok((object_type, rest.to_vec()))
 }
 
-fn read_size(contents: &Vec<u8>) -> Result<ParsedAndRest<u64>, Error> {
-    let mut split = contents.splitn(2, |c| (*c as char) == '\0');
+fn read_size(contents: &Vec<u8>) -> Result<(u64, Vec<u8>), Error> {
+    let (size_str, rest) = try!(read_until(contents, '\0'));
 
-    let size_array =
-        try!(split.next().ok_or(Error::InvalidFile("unable to read header".to_string())));
-    let size_str = try!(str::from_utf8(size_array)
-                        .map_err(|e| Error::InvalidFile(e.description().to_string())));
     let size = try!(size_str.parse::<u64>()
                     .map_err(|e| Error::InvalidFile(e.description().to_string())));
 
-    let rest = try!(split.next().ok_or(Error::InvalidFile("unable to read header".to_string())));
-
-    Ok(ParsedAndRest(size, rest.to_vec()))
+    Ok((size, rest.to_vec()))
 }
 
 pub fn read_header(name: &ObjectName) -> Result<Header, Error> {
@@ -124,7 +130,7 @@ pub fn read_header(name: &ObjectName) -> Result<Header, Error> {
     let mut buffer = Vec::new();
     try!(decoder.read_to_end(&mut buffer).map_err(|e| Error::IOError(e)));
 
-    let ParsedAndRest(object_type, rest) = try!(read_type(&buffer));
-    let ParsedAndRest(size, _) = try!(read_size(&rest));
+    let (object_type, rest) = try!(read_type(&buffer));
+    let (size, _) = try!(read_size(&rest));
     Ok(Header { object_type: object_type, content_length: size })
 }
