@@ -6,6 +6,7 @@ extern crate docopt;
 use docopt::Docopt;
 use gitters::objects;
 use gitters::revisions;
+use std::process;
 
 const USAGE: &'static str = "
 cat-file
@@ -35,25 +36,61 @@ struct Args {
     arg_object: String
 }
 
+fn show_type(name: &objects::Name) -> Result<(), i32> {
+    let header = try!(objects::read_header(&name).map_err(|_| 1));
+
+    let object_type = match header.object_type {
+        objects::Type::Blob => "blob",
+        objects::Type::Tree => "tree",
+        objects::Type::Commit => "commit",
+    };
+    println!("{}", object_type);
+
+    Ok(())
+}
+
+fn show_size(name: &objects::Name) -> Result<(), i32> {
+    let header = try!(objects::read_header(&name).map_err(|_| 1));
+    println!("{}", header.content_length);
+
+    Ok(())
+}
+
+fn check_validity(name: &objects::Name) -> Result<(), i32> {
+    try!(objects::read_header(&name).map_err(|_| 1));
+    Ok(())
+}
+
+fn show_contents(name: &objects::Name) -> Result<(), i32> {
+    let header = try!(objects::read_header(&name).map_err(|_| 1));
+    // TODO
+
+    Ok(())
+}
+
+fn dispatch_for_args(args: &Args) -> Result<(), i32> {
+    let name = revisions::resolve(&args.arg_object).unwrap();
+
+    if args.flag_t {
+        show_type(&name)
+    } else if args.flag_s {
+        show_size(&name)
+    } else if args.flag_e {
+        check_validity(&name)
+    } else if args.flag_p {
+        show_contents(&name)
+    } else {
+        Err(2)
+    }
+}
+
 fn main() {
     let args: Args = Docopt::new(USAGE)
         .and_then(|d| d.decode())
         .unwrap_or_else(|e| e.exit());
 
-    let name = revisions::resolve(&args.arg_object).unwrap();
-    let header = objects::read_header(&name).unwrap();
-
-    if args.flag_t {
-        let object_type = match header.object_type {
-            objects::Type::Blob => "blob",
-            objects::Type::Tree => "tree",
-            objects::Type::Commit => "commit",
-        };
-        println!("{}", object_type);
-    } else if args.flag_s {
-        println!("{}", header.content_length);
-    } else {
-        // TODO
-        println!("{:?}", header);
+    match dispatch_for_args(&args) {
+        Ok(_) => process::exit(0),
+        Err(status) => process::exit(status),
     }
 }
