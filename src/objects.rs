@@ -16,12 +16,12 @@ use std::str;
 /// being referenced. It is expected that such an object name is constructed either when the object
 /// is first being written, or by resolving a reference or revision.
 #[derive(Debug, PartialEq, Eq)]
-pub struct ObjectName(pub String);
+pub struct Name(pub String);
 
-impl fmt::Display for ObjectName {
+impl fmt::Display for Name {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let ObjectName(ref value) = *self;
-        write!(f, "ObjectName({})", value)
+        let Name(ref value) = *self;
+        write!(f, "objects::Name({})", value)
     }
 }
 
@@ -69,9 +69,9 @@ impl error::Error for Error {
     }
 }
 
-fn get_object_path(name: &ObjectName) -> Result<path::PathBuf, Error> {
+fn get_object_path(name: &Name) -> Result<path::PathBuf, Error> {
     let cwd = try!(env::current_dir().map_err(|e| Error::IOError(e)));
-    let ObjectName(ref sha1) = *name;
+    let Name(ref sha1) = *name;
     let (dir, file) = sha1.split_at(2);
     Ok(cwd
        .join(".git/objects")
@@ -121,7 +121,7 @@ fn read_size(contents: &Vec<u8>) -> Result<(u64, Vec<u8>), Error> {
     Ok((size, rest.to_vec()))
 }
 
-pub fn read_header(name: &ObjectName) -> Result<Header, Error> {
+pub fn read_header(name: &Name) -> Result<Header, Error> {
     let path = try!(get_object_path(name));
 
     // read file
