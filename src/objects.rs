@@ -3,12 +3,11 @@
 
 use flate2::read::ZlibDecoder;
 use std::env;
-use std::error;
 use std::error::Error as StdError;
 use std::fmt;
 use std::fs::File;
 use std::io;
-use std::io::prelude::Read;
+use std::io::{BufRead, BufReader};
 use std::path;
 use std::str;
 
@@ -53,7 +52,7 @@ impl fmt::Display for Error {
     }
 }
 
-impl error::Error for Error {
+impl StdError for Error {
     fn description(&self) -> &str {
         match *self {
             Error::IOError(ref err) => err.description(),
@@ -61,7 +60,7 @@ impl error::Error for Error {
         }
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&StdError> {
         match *self {
             Error::IOError(ref err) => Some(err),
             ref err => Some(err)
@@ -79,46 +78,49 @@ fn get_object_path(name: &Name) -> Result<path::PathBuf, Error> {
        .join(file))
 }
 
-fn invalid_header_error() -> Error {
-    Error::InvalidFile("unable to read header".to_string())
-}
-
 fn std_error_to_objects_error<T>(e: T) -> Error
-        where T: error::Error {
+        where T: StdError {
     Error::InvalidFile(e.description().to_string())
 }
 
-fn read_until(contents: &Vec<u8>, until: char) -> Result<(&str, Vec<u8>), Error> {
-    let mut split = contents.splitn(2, |c| (*c as char) == until);
+fn read_until<R>(mut reader: &mut R, until: char) -> Result<String, Error>
+        where R: BufRead, {
+    let mut buffer = Vec::new();
+    try!(reader.read_until(until as u8, &mut buffer).map_err(std_error_to_objects_error));
 
-    let read = try!(split.next().ok_or(invalid_header_error()));
-    let parsed = try!(str::from_utf8(read).map_err(std_error_to_objects_error));
+    // The last character is the one that we're reading up to, so discard that before processing
+    // the bytes that were read.
+    buffer.pop();
 
-    let rest = try!(split.next().ok_or(invalid_header_error()));
-
-    Ok((parsed, rest.to_vec()))
+    str::from_utf8(&buffer)
+        .map(|s| s.to_string())
+        .map_err(std_error_to_objects_error)
 }
 
-fn read_type(contents: &Vec<u8>) -> Result<(Type, Vec<u8>), Error> {
-    let (type_str, rest) = try!(read_until(contents, ' '));
+fn read_type<R>(mut reader: &mut R) -> Result<Type, Error>
+        where R: BufRead, {
+    let type_str = try!(read_until(&mut reader, ' '));
 
-    let object_type = try!(match type_str {
+    let object_type = try!(match type_str.as_ref() {
         "blob" => Ok(Type::Blob),
         "tree" => Ok(Type::Tree),
         "commit" => Ok(Type::Commit),
         value => Err(Error::InvalidFile(format!("invalid type: {}", value))),
     });
 
-    Ok((object_type, rest.to_vec()))
+    Ok(object_type)
 }
 
-fn read_size(contents: &Vec<u8>) -> Result<(u64, Vec<u8>), Error> {
-    let (size_str, rest) = try!(read_until(contents, '\0'));
-
+fn read_size<R>(mut reader: &mut R) -> Result<u64, Error>
+        where R: BufRead, {
+    let mut buffer = Vec::new();
+    try!(reader.read_until('\0' as u8, &mut buffer).map_err(std_error_to_objects_error));
+    buffer.pop();
+    let size_str = try!(str::from_utf8(&buffer).map_err(std_error_to_objects_error));
     let size = try!(size_str.parse::<u64>()
                     .map_err(|e| Error::InvalidFile(e.description().to_string())));
 
-    Ok((size, rest.to_vec()))
+    Ok(size)
 }
 
 pub fn read_header(name: &Name) -> Result<Header, Error> {
@@ -126,11 +128,10 @@ pub fn read_header(name: &Name) -> Result<Header, Error> {
 
     // read file
     let file = try!(File::open(path.as_path()).map_err(|e| Error::IOError(e)));
-    let mut decoder = ZlibDecoder::new(file);
-    let mut buffer = Vec::new();
-    try!(decoder.read_to_end(&mut buffer).map_err(|e| Error::IOError(e)));
+    let decoder = ZlibDecoder::new(file);
+    let mut reader = BufReader::new(decoder);
 
-    let (object_type, rest) = try!(read_type(&buffer));
-    let (size, _) = try!(read_size(&rest));
+    let object_type = try!(read_type(&mut reader));
+    let size = try!(read_size(&mut reader));
     Ok(Header { object_type: object_type, content_length: size })
 }
