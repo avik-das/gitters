@@ -4,9 +4,9 @@ extern crate rustc_serialize;
 extern crate docopt;
 
 use docopt::Docopt;
+use gitters::cli;
 use gitters::objects;
 use gitters::revisions;
-use std::process;
 
 const USAGE: &'static str = "
 cat-file
@@ -36,8 +36,8 @@ struct Args {
     arg_object: String
 }
 
-fn show_type(name: &objects::Name) -> Result<(), i32> {
-    let header = try!(objects::read_header(&name).map_err(|_| 1));
+fn show_type(name: &objects::Name) -> cli::Result {
+    let header = try!(cli::wrap_with_status(objects::read_header(&name), 1));
 
     let object_type = match header.object_type {
         objects::Type::Blob => "blob",
@@ -46,30 +46,30 @@ fn show_type(name: &objects::Name) -> Result<(), i32> {
     };
     println!("{}", object_type);
 
-    Ok(())
+    cli::success()
 }
 
-fn show_size(name: &objects::Name) -> Result<(), i32> {
-    let header = try!(objects::read_header(&name).map_err(|_| 1));
+fn show_size(name: &objects::Name) -> cli::Result {
+    let header = try!(cli::wrap_with_status(objects::read_header(&name), 1));
     println!("{}", header.content_length);
 
-    Ok(())
+    cli::success()
 }
 
-fn check_validity(name: &objects::Name) -> Result<(), i32> {
-    try!(objects::read_header(&name).map_err(|_| 1));
-    Ok(())
+fn check_validity(name: &objects::Name) -> cli::Result {
+    try!(cli::wrap_with_status(objects::read_header(&name), 1));
+    cli::success()
 }
 
-fn show_contents(name: &objects::Name) -> Result<(), i32> {
-    let header = try!(objects::read_header(&name).map_err(|_| 1));
+fn show_contents(name: &objects::Name) -> cli::Result {
+    try!(cli::wrap_with_status(objects::read_header(&name), 1));
     // TODO
 
-    Ok(())
+    cli::success()
 }
 
-fn dispatch_for_args(args: &Args) -> Result<(), i32> {
-    let name = revisions::resolve(&args.arg_object).unwrap();
+fn dispatch_for_args(args: &Args) -> cli::Result {
+    let name = try!(cli::wrap_with_status(revisions::resolve(&args.arg_object), 1));
 
     if args.flag_t {
         show_type(&name)
@@ -80,7 +80,7 @@ fn dispatch_for_args(args: &Args) -> Result<(), i32> {
     } else if args.flag_p {
         show_contents(&name)
     } else {
-        Err(2)
+        Err(cli::Error { message: "No flags specified".to_string(), status: 2 })
     }
 }
 
@@ -89,8 +89,5 @@ fn main() {
         .and_then(|d| d.decode())
         .unwrap_or_else(|e| e.exit());
 
-    match dispatch_for_args(&args) {
-        Ok(_) => process::exit(0),
-        Err(status) => process::exit(status),
-    }
+    cli::exit_with(dispatch_for_args(&args))
 }
