@@ -62,7 +62,7 @@ fn check_validity(name: &objects::Name) -> cli::Result {
 }
 
 fn show_contents(name: &objects::Name) -> cli::Result {
-    try!(cli::wrap_with_status(objects::read_header(&name), 1));
+    try!(cli::wrap_with_status(objects::read_object(&name), 1));
     // TODO
 
     cli::success()

@@ -2,6 +2,7 @@
 /// database that is git.
 
 use flate2::read::ZlibDecoder;
+use regex::Regex;
 use std::env;
 use std::error::Error as StdError;
 use std::fmt;
@@ -123,15 +124,103 @@ fn read_size<R>(mut reader: &mut R) -> Result<u64, Error>
     Ok(size)
 }
 
-pub fn read_header(name: &Name) -> Result<Header, Error> {
+fn read_file(name: &Name) -> Result<BufReader<ZlibDecoder<File>>, Error> {
     let path = try!(get_object_path(name));
 
     // read file
     let file = try!(File::open(path.as_path()).map_err(|e| Error::IOError(e)));
-    let decoder = ZlibDecoder::new(file);
-    let mut reader = BufReader::new(decoder);
+    Ok(BufReader::new(ZlibDecoder::new(file)))
+}
 
+fn read_header_from_reader<R>(mut reader: &mut R) -> Result<Header, Error>
+        where R: BufRead {
     let object_type = try!(read_type(&mut reader));
     let size = try!(read_size(&mut reader));
     Ok(Header { object_type: object_type, content_length: size })
+}
+
+pub fn read_header(name: &Name) -> Result<Header, Error> {
+    let mut reader = try!(read_file(name));
+    read_header_from_reader(&mut reader)
+}
+
+fn parse_commit<R>(mut reader: &mut R) -> Result<(), Error>
+        where R: BufRead {
+    lazy_static! {
+        static ref TREE_REGEX: Regex = Regex::new(r"^tree (?P<rev>[0-9a-f]{40})$").unwrap();
+        static ref PARENT_REGEX: Regex = Regex::new(r"^parent (?P<rev>[0-9a-f]{40})$").unwrap();
+        static ref AUTHOR_REGEX: Regex =
+            Regex::new(r"^author (?P<name>.+) (?P<date>\d+ [+-]\d{4})$").unwrap();
+        static ref COMMITTER_REGEX: Regex =
+            Regex::new(r"^committer (?P<name>.+) (?P<date>\d+ [+-]\d{4})$").unwrap();
+    }
+
+    loop {
+        let mut line = String::new();
+        try!(reader.read_line(&mut line).map_err(std_error_to_objects_error));
+
+        line.pop();
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            // Empty line, so we're ready to read the commit message at this point.
+            break;
+        }
+
+        let caps = TREE_REGEX.captures(&line);
+        if caps.is_some() {
+            let caps = caps.unwrap();
+            let tree = Name(caps["rev"].to_string());
+            println!("found tree: {}", tree);
+            continue;
+        }
+
+        let caps = PARENT_REGEX.captures(&line);
+        if caps.is_some() {
+            let caps = caps.unwrap();
+            let parent = Name(caps["rev"].to_string());
+            println!("found parent: {}", parent);
+            continue;
+        }
+
+        let caps = AUTHOR_REGEX.captures(&line);
+        if caps.is_some() {
+            let caps = caps.unwrap();
+            let name = caps["name"].to_string();
+            let date = caps["date"].to_string();
+            println!("found author: '{}' (authored at {})", name, date);
+            continue;
+        }
+
+        let caps = COMMITTER_REGEX.captures(&line);
+        if caps.is_some() {
+            let caps = caps.unwrap();
+            let name = caps["name"].to_string();
+            let date = caps["date"].to_string();
+            println!("found committer: '{}' (committed at {})", name, date);
+            continue;
+        }
+
+        return Err(Error::InvalidFile(format!("Unexpected line in commit object: '{}'", line)));
+    }
+
+    let mut message = String::new();
+    try!(reader.read_to_string(&mut message).map_err(std_error_to_objects_error));
+    message.pop();
+    let message = message.trim();
+
+    println!("found commit message:\n{}", message);
+    println!("DONE");
+
+    Ok(())
+}
+
+// TODO: return parsed object
+pub fn read_object(name: &Name) -> Result<(), Error> {
+    let mut reader = try!(read_file(name));
+    let header = try!(read_header_from_reader(&mut reader));
+
+    match header.object_type {
+        Type::Commit => parse_commit(&mut reader),
+        typ => Err(Error::InvalidFile(format!("unhandled object type: {:?}", typ)))
+    }
 }
