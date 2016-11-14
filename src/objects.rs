@@ -1,4 +1,4 @@
-/// Provides functionality for reading writing the objects that make up the content-addressable
+/// Provides functionality for reading/writing the objects that make up the content-addressable
 /// database that is git.
 
 use commits;

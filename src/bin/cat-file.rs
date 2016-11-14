@@ -34,7 +34,7 @@ struct Args {
     flag_s: bool,
     flag_e: bool,
     flag_p: bool,
-    arg_object: String
+    arg_object: String,
 }
 
 fn show_type(name: &objects::Name) -> cli::Result {
