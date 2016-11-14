@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Avik Das <avik.das@berkeley.edu>"]
 
 [dependencies]
+chrono = "0.2"
 docopt = "0.6"
 flate2 = "0.2"
 lazy_static = "0.2"

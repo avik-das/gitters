@@ -1,6 +1,7 @@
 /// Provides functionality for reading writing the objects that make up the content-addressable
 /// database that is git.
 
+use chrono::{DateTime, FixedOffset, NaiveDateTime};
 use flate2::read::ZlibDecoder;
 use regex::Regex;
 use std::env;
@@ -144,6 +145,32 @@ pub fn read_header(name: &Name) -> Result<Header, Error> {
     read_header_from_reader(&mut reader)
 }
 
+fn parse_commit_date(date_str: String) -> Result<DateTime<FixedOffset>, Error> {
+    lazy_static! {
+        static ref DATETIME_REGEX: Regex =
+            Regex::new(concat!(
+                r"^(?P<timestamp>[0-9][0-9]*) ",
+                r"(?P<tz_hours>[+-][0-9]{2})",
+                r"(?P<tz_minutes>[0-9]{2})")).unwrap();
+    }
+
+    let caps = try!(DATETIME_REGEX.captures(&date_str)
+                    .ok_or(Error::InvalidFile(format!("invalid date: {}", date_str))));
+
+    let utc = try!(
+        caps["timestamp"].parse::<i64>()
+        .map_err(std_error_to_objects_error)
+        .and_then(|t| NaiveDateTime::from_timestamp_opt(t, 0)
+                  .ok_or(Error::InvalidFile(format!("invalid timestamp: {}", date_str)))));
+
+    let tz_hours = try!(caps["tz_hours"].parse::<i32>().map_err(std_error_to_objects_error));
+    let tz_minutes = try!(caps["tz_minutes"].parse::<i32>().map_err(std_error_to_objects_error));
+    let tz = try!(FixedOffset::east_opt(tz_hours * 3600 + tz_minutes * 60)
+                  .ok_or(Error::InvalidFile(format!("invalid timezone: {}", date_str))));
+
+    Ok(DateTime::from_utc(utc, tz))
+}
+
 fn parse_commit<R>(mut reader: &mut R) -> Result<(), Error>
         where R: BufRead {
     lazy_static! {
@@ -186,7 +213,7 @@ fn parse_commit<R>(mut reader: &mut R) -> Result<(), Error>
         if caps.is_some() {
             let caps = caps.unwrap();
             let name = caps["name"].to_string();
-            let date = caps["date"].to_string();
+            let date = try!(parse_commit_date(caps["date"].to_string()));
             println!("found author: '{}' (authored at {})", name, date);
             continue;
         }
@@ -195,7 +222,7 @@ fn parse_commit<R>(mut reader: &mut R) -> Result<(), Error>
         if caps.is_some() {
             let caps = caps.unwrap();
             let name = caps["name"].to_string();
-            let date = caps["date"].to_string();
+            let date = try!(parse_commit_date(caps["date"].to_string()));
             println!("found committer: '{}' (committed at {})", name, date);
             continue;
         }
