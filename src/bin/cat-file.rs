@@ -5,6 +5,7 @@ extern crate docopt;
 
 use docopt::Docopt;
 use gitters::cli;
+use gitters::commits;
 use gitters::objects;
 use gitters::revisions;
 
@@ -62,8 +63,31 @@ fn check_validity(name: &objects::Name) -> cli::Result {
 }
 
 fn show_contents(name: &objects::Name) -> cli::Result {
-    try!(cli::wrap_with_status(objects::read_object(&name), 1));
-    // TODO
+    let obj = try!(cli::wrap_with_status(objects::read_object(&name), 1));
+    match obj {
+        objects::Object::Commit(commit) => {
+            let objects::Name(name) = commit.name;
+            println!("commit {}", name);
+
+            let objects::Name(tree) = commit.tree;
+            println!("tree     : {}", tree);
+
+            if commit.parent.is_some() {
+                let objects::Name(parent) = commit.parent.unwrap();
+                println!("parent   : {}", parent);
+            }
+
+            let commits::CommitUser { name, date } = commit.author;
+            println!("author   : {} at {}", name, date);
+
+            let commits::CommitUser { name, date } = commit.committer;
+            println!("committer: {} at {}", name, date);
+
+            println!("");
+            println!("{}", commit.message);
+        },
+        _ => { /* Not handled yet */ }
+    }
 
     cli::success()
 }

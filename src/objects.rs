@@ -1,22 +1,19 @@
 /// Provides functionality for reading writing the objects that make up the content-addressable
 /// database that is git.
 
-use chrono::{DateTime, FixedOffset, NaiveDateTime};
+use commits;
+
 use flate2::read::ZlibDecoder;
-use regex::Regex;
-use std::env;
+
+use std::{env, fmt, io, path, str};
 use std::error::Error as StdError;
-use std::fmt;
 use std::fs::File;
-use std::io;
 use std::io::{BufRead, BufReader};
-use std::path;
-use std::str;
 
 /// An object name, which must be a 40-byte hexadecimal string containing the SHA-1 of the object
 /// being referenced. It is expected that such an object name is constructed either when the object
 /// is first being written, or by resolving a reference or revision.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Name(pub String);
 
 impl fmt::Display for Name {
@@ -68,6 +65,12 @@ impl StdError for Error {
             ref err => Some(err)
         }
     }
+}
+
+pub enum Object {
+    Blob,
+    Tree,
+    Commit(commits::Commit),
 }
 
 fn get_object_path(name: &Name) -> Result<path::PathBuf, Error> {
@@ -145,109 +148,16 @@ pub fn read_header(name: &Name) -> Result<Header, Error> {
     read_header_from_reader(&mut reader)
 }
 
-fn parse_commit_date(date_str: String) -> Result<DateTime<FixedOffset>, Error> {
-    lazy_static! {
-        static ref DATETIME_REGEX: Regex =
-            Regex::new(concat!(
-                r"^(?P<timestamp>[0-9][0-9]*) ",
-                r"(?P<tz_hours>[+-][0-9]{2})",
-                r"(?P<tz_minutes>[0-9]{2})")).unwrap();
-    }
-
-    let caps = try!(DATETIME_REGEX.captures(&date_str)
-                    .ok_or(Error::InvalidFile(format!("invalid date: {}", date_str))));
-
-    let utc = try!(
-        caps["timestamp"].parse::<i64>()
-        .map_err(std_error_to_objects_error)
-        .and_then(|t| NaiveDateTime::from_timestamp_opt(t, 0)
-                  .ok_or(Error::InvalidFile(format!("invalid timestamp: {}", date_str)))));
-
-    let tz_hours = try!(caps["tz_hours"].parse::<i32>().map_err(std_error_to_objects_error));
-    let tz_minutes = try!(caps["tz_minutes"].parse::<i32>().map_err(std_error_to_objects_error));
-    let tz = try!(FixedOffset::east_opt(tz_hours * 3600 + tz_minutes * 60)
-                  .ok_or(Error::InvalidFile(format!("invalid timezone: {}", date_str))));
-
-    Ok(DateTime::from_utc(utc, tz))
-}
-
-fn parse_commit<R>(mut reader: &mut R) -> Result<(), Error>
-        where R: BufRead {
-    lazy_static! {
-        static ref TREE_REGEX: Regex = Regex::new(r"^tree (?P<rev>[0-9a-f]{40})$").unwrap();
-        static ref PARENT_REGEX: Regex = Regex::new(r"^parent (?P<rev>[0-9a-f]{40})$").unwrap();
-        static ref AUTHOR_REGEX: Regex =
-            Regex::new(r"^author (?P<name>.+) (?P<date>\d+ [+-]\d{4})$").unwrap();
-        static ref COMMITTER_REGEX: Regex =
-            Regex::new(r"^committer (?P<name>.+) (?P<date>\d+ [+-]\d{4})$").unwrap();
-    }
-
-    loop {
-        let mut line = String::new();
-        try!(reader.read_line(&mut line).map_err(std_error_to_objects_error));
-
-        line.pop();
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            // Empty line, so we're ready to read the commit message at this point.
-            break;
-        }
-
-        let caps = TREE_REGEX.captures(&line);
-        if caps.is_some() {
-            let caps = caps.unwrap();
-            let tree = Name(caps["rev"].to_string());
-            println!("found tree: {}", tree);
-            continue;
-        }
-
-        let caps = PARENT_REGEX.captures(&line);
-        if caps.is_some() {
-            let caps = caps.unwrap();
-            let parent = Name(caps["rev"].to_string());
-            println!("found parent: {}", parent);
-            continue;
-        }
-
-        let caps = AUTHOR_REGEX.captures(&line);
-        if caps.is_some() {
-            let caps = caps.unwrap();
-            let name = caps["name"].to_string();
-            let date = try!(parse_commit_date(caps["date"].to_string()));
-            println!("found author: '{}' (authored at {})", name, date);
-            continue;
-        }
-
-        let caps = COMMITTER_REGEX.captures(&line);
-        if caps.is_some() {
-            let caps = caps.unwrap();
-            let name = caps["name"].to_string();
-            let date = try!(parse_commit_date(caps["date"].to_string()));
-            println!("found committer: '{}' (committed at {})", name, date);
-            continue;
-        }
-
-        return Err(Error::InvalidFile(format!("Unexpected line in commit object: '{}'", line)));
-    }
-
-    let mut message = String::new();
-    try!(reader.read_to_string(&mut message).map_err(std_error_to_objects_error));
-    message.pop();
-    let message = message.trim();
-
-    println!("found commit message:\n{}", message);
-    println!("DONE");
-
-    Ok(())
-}
-
-// TODO: return parsed object
-pub fn read_object(name: &Name) -> Result<(), Error> {
+pub fn read_object(name: &Name) -> Result<Object, Error> {
     let mut reader = try!(read_file(name));
     let header = try!(read_header_from_reader(&mut reader));
 
     match header.object_type {
-        Type::Commit => parse_commit(&mut reader),
+        Type::Commit => {
+            let commit = try!(commits::parse_commit(&mut reader, name)
+                              .map_err(std_error_to_objects_error));
+            Ok(Object::Commit(commit))
+        },
         typ => Err(Error::InvalidFile(format!("unhandled object type: {:?}", typ)))
     }
 }
