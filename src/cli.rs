@@ -1,5 +1,5 @@
-/// Provides utilities for creating standardized command-line interfaces (CLIs), such as a means of
-/// propagating error status codes.
+//! Provides utilities for creating standardized command-line interfaces (CLIs), such as a means of
+//! propagating error status codes.
 
 use std::error::Error as StdError;
 use std::fmt;

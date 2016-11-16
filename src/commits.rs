@@ -1,4 +1,4 @@
-/// Provides functionality for reading/writing commit objects.
+//! Provides functionality for reading/writing commit objects.
 
 use objects::Name;
 
