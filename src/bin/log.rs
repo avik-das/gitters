@@ -7,6 +7,7 @@ use docopt::Docopt;
 use gitters::cli;
 use gitters::commits;
 use gitters::objects;
+use gitters::pager;
 use gitters::revisions;
 
 const USAGE: &'static str = "
@@ -42,6 +43,8 @@ fn print_full_commit(commit: &commits::Commit) {
 }
 
 fn print_history(commit_rev: String) -> cli::Result {
+    try!(cli::wrap_with_status(pager::setup(), 1));
+
     let resolved = try!(cli::wrap_with_status(revisions::resolve(&commit_rev), 1));
 
     let mut current_commit_rev = Some(resolved);
