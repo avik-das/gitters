@@ -82,19 +82,48 @@ impl <'a> Parser<'a> {
 
     fn parse_section(&mut self) -> Result<(), Error> {
         let mut section_name = String::new();
+        let mut subsection_name = String::new();
+        let mut is_reading_subsection = false;
 
         self.chars.next();
         loop {
             match self.chars.peek() {
+                Some(&chr @ ' ') | Some(&chr @ '\t') => {
+                    self.chars.next();
+
+                    if is_reading_subsection {
+                        subsection_name.push(chr);
+                    }
+                },
+                Some(&'"') => {
+                    self.chars.next();
+
+                    // We're deliberately ignoring escaped quotes for now.
+                    is_reading_subsection = !is_reading_subsection;
+                },
                 Some(&']') | None => {
                     self.chars.next();
-                    self.current_section_names.push(section_name);
+
+                    self.current_section_names.push(section_name.trim().to_string());
+                    if !subsection_name.is_empty() {
+                        self.current_section_names.push(subsection_name.clone());
+                    }
+
                     try!(self.parse_variables());
+
+                    if !subsection_name.is_empty() {
+                        self.current_section_names.pop();
+                    }
                     self.current_section_names.pop();
                     break;
                 },
                 Some(&chr) => {
-                    section_name.push(chr);
+                    if is_reading_subsection {
+                        subsection_name.push(chr);
+                    } else {
+                        section_name.push(chr);
+                    }
+
                     self.chars.next();
                 }
             }
@@ -251,7 +280,7 @@ mod tests {
 
     #[test]
     fn parses_config_syntax() {
-        let contents = r"
+        let contents = r#"
 # This is a comment
 [simple]
 key0 = val0
@@ -263,9 +292,11 @@ key4
 key-5 # here's a comment
 key6 = val6 # and another comment
 
+[simple "subsection (with spaces)"]
+key7 = val7
+
 # TODO: multiline values
-# TODO: subsections
-";
+"#;
 
         let mut config = Config::new();
         config.add_from_string(contents.to_string()).unwrap();
@@ -277,6 +308,7 @@ key6 = val6 # and another comment
                    ("simple.key0", "val0"),
                    ("simple.key1", "val1"),
                    ("simple.key2", "val2 with spaces"),
+                   ("simple.subsection (with spaces).key7", "val7"),
                    ]
                    .iter()
                    .map(|s| (s.0.to_string(), s.1.to_string()))
