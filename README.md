@@ -19,4 +19,7 @@ cargo run --bin cat-file -- -p 4ddb0025ef5914b51fb835495f5259a6d962df21
 
 # Run "log" on a commit with a few ancestors:
 cargo run --bin log -- 44d6437947787a44b0e7d463954eef2daa44aaa5
+
+# See the configuration for this repository:
+cargo run --bin config -- --list
 ```
