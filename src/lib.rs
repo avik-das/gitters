@@ -6,6 +6,7 @@ extern crate regex;
 
 pub mod cli;
 pub mod commits;
+pub mod config;
 pub mod objects;
 pub mod pager;
 pub mod revisions;
