@@ -2,9 +2,10 @@
 //! objects. See gitrevisions(7) for the full specification on how revisions are specified, of
 //! which this module will provide a subset.
 
-use std::error;
-use std::fmt;
-use std::fs;
+use std::{error, fmt, fs};
+use std::fs::File;
+use std::io::Read;
+use std::path::PathBuf;
 use regex::Regex;
 use commits;
 use objects;
@@ -103,7 +104,15 @@ pub fn resolve(rev: &str) -> Result<objects::Name, Error> {
         }
 
         return Ok(parent);
-    }
+    } else {
+        let mut ref_filename = PathBuf::from(".git/refs/heads");
+        ref_filename.push(rev);
 
-    Err(Error::InvalidRevision)
+        let mut file = try!(File::open(ref_filename).map_err(|_| Error::InvalidRevision));
+
+        let mut contents = String::new();
+        try!(file.read_to_string(&mut contents).map_err(|_| Error::InvalidRevision));
+
+        return Ok(objects::Name(contents.trim().to_string()));
+    }
 }

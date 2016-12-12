@@ -32,6 +32,13 @@ fn ancestor_specification_resolves_to_ancestor_sha1() {
 }
 
 #[test]
+fn branch_resolves_to_sha1() {
+    assert_eq!(
+        Ok(objects::Name("41cf28e8cac50f5cfeda40cfbfdd049763541c5a".to_string())),
+        revisions::resolve("introduce-tests"));
+}
+
+#[test]
 fn invalid_revision_does_not_resolve() {
     assert_eq!(
         Err(revisions::Error::InvalidRevision),
