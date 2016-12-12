@@ -12,14 +12,15 @@ Assuming you have Rust installed already:
 git clone https://github.com/avik-das/gitters.git
 cd gitters
 
-# For now, very little tooling is available, and it must be run via Cargo.
+# Very few git tools are available, but for the ones that are implemented,
+# replace `git` with `./gitters` when executing the tool.
 
 # Run "cat-file" on the initial commit:
-cargo run --bin cat-file -- -p 4ddb0025ef5914b51fb835495f5259a6d962df21
+./gitters cat-file -p 4ddb0025ef5914b51fb835495f5259a6d962df21
 
 # Run "log" on a commit with a few ancestors:
-cargo run --bin log -- 44d6437947787a44b0e7d463954eef2daa44aaa5
+./gitters log 44d6437947787a44b0e7d463954eef2daa44aaa5
 
 # See the configuration for this repository:
-cargo run --bin config -- --list
+./gitters config --list
 ```
