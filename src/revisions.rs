@@ -59,9 +59,25 @@ pub fn resolve(rev: &str) -> Result<objects::Name, Error> {
         static ref FULL_SHA1_REGEX: Regex = Regex::new(r"^[0-9a-f]{40}$").unwrap();
         static ref PARTIAL_SHA1_REGEX: Regex = Regex::new(r"^[0-9a-f]{4,39}$").unwrap();
         static ref ANCESTOR_REGEX: Regex = Regex::new(r"^(?P<child>.+)~(?P<num>\d+)$").unwrap();
+
+        static ref SYMBOLIC_REF_REGEX: Regex = Regex::new(r"^ref: (?P<ref>.+)\s*$").unwrap();
     }
 
-    if rev.ends_with("^") {
+    if rev == "HEAD" {
+        let mut head_file = try!(File::open(".git/HEAD").map_err(|_| Error::InvalidRevision));
+        let mut head_contents = String::new();
+        try!(head_file.read_to_string(&mut head_contents).map_err(|_| Error::InvalidRevision));
+
+        let caps = try!(SYMBOLIC_REF_REGEX.captures(&head_contents).ok_or(Error::InvalidRevision));
+        let mut ref_filename = PathBuf::from(".git");
+        ref_filename.push(&caps["ref"]);
+
+        let mut ref_file = try!(File::open(ref_filename).map_err(|_| Error::InvalidRevision));
+        let mut ref_contents = String::new();
+        try!(ref_file.read_to_string(&mut ref_contents).map_err(|_| Error::InvalidRevision));
+
+        return Ok(objects::Name(ref_contents.trim().to_string()));
+    } else if rev.ends_with("^") {
         let child = &rev[..(rev.len() - 1)];
         return parent_of_commit(child);
     } else if FULL_SHA1_REGEX.is_match(rev) {
