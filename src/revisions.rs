@@ -6,6 +6,7 @@ use std::error;
 use std::fmt;
 use std::fs;
 use regex::Regex;
+use commits;
 use objects;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -46,7 +47,18 @@ pub fn resolve(rev: &str) -> Result<objects::Name, Error> {
         static ref PARTIAL_SHA1_REGEX: Regex = Regex::new(r"^[0-9a-f]{4,39}$").unwrap();
     }
 
-    if FULL_SHA1_REGEX.is_match(rev) {
+    if rev.ends_with("^") {
+        let child = &rev[..(rev.len() - 1)];
+        let resolved_child = try!(resolve(child));
+        let child_object =
+            try!(objects::read_object(&resolved_child).map_err(|_| Error::InvalidRevision));
+
+        match child_object {
+            objects::Object::Commit(
+                commits::Commit { parent: Some(parent), .. }) => return Ok(parent),
+            _ => return Err(Error::InvalidRevision),
+        }
+    } else if FULL_SHA1_REGEX.is_match(rev) {
         return Ok(objects::Name(rev.to_string()));
     } else if PARTIAL_SHA1_REGEX.is_match(rev) {
         let prefix = &rev[..2];
