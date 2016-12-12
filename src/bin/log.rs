@@ -14,7 +14,7 @@ const USAGE: &'static str = "
 log
 
 Usage:
-  log <object>
+  log [<object>]
   log (-h | --help)
 
 Options:
@@ -23,7 +23,7 @@ Options:
 
 #[derive(RustcDecodable)]
 struct Args {
-    arg_object: String,
+    arg_object: Option<String>,
 }
 
 fn print_full_commit(commit: &commits::Commit) {
@@ -43,6 +43,8 @@ fn print_full_commit(commit: &commits::Commit) {
 }
 
 fn print_history(commit_rev: String) -> cli::Result {
+    println!("commit_rev: '{}'", commit_rev);
+
     let resolved = try!(cli::wrap_with_status(revisions::resolve(&commit_rev), 1));
     try!(cli::wrap_with_status(pager::setup(), 1));
 
@@ -74,5 +76,5 @@ fn main() {
         .and_then(|d| d.decode())
         .unwrap_or_else(|e| e.exit());
 
-    cli::exit_with(print_history(args.arg_object))
+    cli::exit_with(print_history(args.arg_object.unwrap_or("HEAD".to_string())))
 }

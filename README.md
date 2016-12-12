@@ -20,6 +20,7 @@ cd gitters
 
 # Run "log" on a commit with a few ancestors:
 ./gitters log 44d6437947787a44b0e7d463954eef2daa44aaa5
+./gitters log  # or just look at the history starting at HEAD
 
 # See the configuration for this repository:
 ./gitters config --list
