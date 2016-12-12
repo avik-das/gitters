@@ -1,7 +1,7 @@
 //! Provides functionality for building up a model of the configuration files used by git, as well
 //! as editing them.
 
-use std::{fmt, io, str};
+use std::{env, fmt, io, str};
 use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::fs::File;
@@ -188,7 +188,7 @@ impl Config {
         Config { map: HashMap::new() }
     }
 
-    fn add_from_file(&mut self, filename: &str) -> Result<&Config, Error> {
+    fn add_from_file(&mut self, filename: String) -> Result<&Config, Error> {
         println!("reading from {}", filename);
         let mut file = try!(File::open(filename).map_err(|e| Error::IOError(e)));
         let mut contents = String::new();
@@ -221,9 +221,26 @@ impl Config {
 pub fn read_all() -> Result<Config, Error> {
     let mut config = Config::new();
 
-    // TODO: this doesn't actually work, because "~" is not expanded. However, when we start
-    // reading from actual config files, this will need to be reworked anyway.
-    try!(config.add_from_file("~/.gitconfig"));
+    let home_gitconfig = env::home_dir()
+        .and_then(|mut path| {
+            path.push(".gitconfig");
+            path.to_str().map(|s| s.to_string())
+        });
+    match home_gitconfig {
+        Some(path) => { try!(config.add_from_file(path)); },
+        None => {}
+    }
+
+    let repo_gitconfig = env::current_dir()
+        .ok()
+        .and_then(|mut path| {
+            path.push(".git/config");
+            path.to_str().map(|s| s.to_string())
+        });
+    match repo_gitconfig {
+        Some(path) => { try!(config.add_from_file(path)); },
+        None => {}
+    }
 
     Ok(config)
 }
