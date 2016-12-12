@@ -11,7 +11,7 @@ use gitters::pager;
 use gitters::revisions;
 
 const USAGE: &'static str = "
-log
+log - Show commit logs
 
 Usage:
   log [<object>]

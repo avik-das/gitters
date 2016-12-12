@@ -11,7 +11,9 @@ use gitters::cli;
 use gitters::config;
 
 const USAGE: &'static str = "
-config
+config - Get and set repository or global options
+
+Selecting a subset of the config files is not supported, and setting options is not supported yet.
 
 Usage:
   config [options] <name> [<value>]

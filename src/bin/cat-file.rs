@@ -10,7 +10,7 @@ use gitters::objects;
 use gitters::revisions;
 
 const USAGE: &'static str = "
-cat-file
+cat-file - Provide content or type and size information for repository objects
 
 Usage:
   cat-file -t <object>
