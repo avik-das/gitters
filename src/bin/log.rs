@@ -43,8 +43,6 @@ fn print_full_commit(commit: &commits::Commit) {
 }
 
 fn print_history(commit_rev: String) -> cli::Result {
-    println!("commit_rev: '{}'", commit_rev);
-
     let resolved = try!(cli::wrap_with_status(revisions::resolve(&commit_rev), 1));
     try!(cli::wrap_with_status(pager::setup(), 1));
 
