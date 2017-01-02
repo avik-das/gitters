@@ -37,4 +37,5 @@ Use `./gitters <command> --help` to see the available options for each of the fo
 - `cat-file`
 - `config`
 - `log`
+- `ls-files`
 - `rev-parse`
