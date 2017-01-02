@@ -8,7 +8,7 @@ use flate2::read::ZlibDecoder;
 use std::{env, fmt, io, path, str};
 use std::error::Error as StdError;
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read};
 
 /// An object name, which must be a 40-byte hexadecimal string containing the SHA-1 of the object
 /// being referenced. It is expected that such an object name is constructed either when the object
@@ -68,7 +68,7 @@ impl StdError for Error {
 }
 
 pub enum Object {
-    Blob,
+    Blob(String),
     Tree,
     Commit(commits::Commit),
 }
@@ -157,6 +157,11 @@ pub fn read_object(name: &Name) -> Result<Object, Error> {
             let commit = try!(commits::parse_commit(&mut reader, name)
                               .map_err(std_error_to_objects_error));
             Ok(Object::Commit(commit))
+        },
+        Type::Blob => {
+            let mut contents = String::new();
+            try!(reader.read_to_string(&mut contents).map_err(std_error_to_objects_error));
+            Ok(Object::Blob(contents))
         },
         typ => Err(Error::InvalidFile(format!("unhandled object type: {:?}", typ)))
     }

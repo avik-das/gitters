@@ -86,6 +86,11 @@ fn show_contents(name: &objects::Name) -> cli::Result {
             println!("");
             println!("{}", commit.message);
         },
+        objects::Object::Blob(contents) => {
+            // Don't use println, as we don't want to include an extra newline at the end of the
+            // blob contents.
+            print!("{}", contents);
+        },
         _ => { /* Not handled yet */ }
     }
 
