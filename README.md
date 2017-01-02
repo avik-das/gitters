@@ -34,6 +34,7 @@ Supported commands
 
 Use `./gitters <command> --help` to see the available options for each of the following commands.
 
+- `branch`
 - `cat-file`
 - `config`
 - `log`

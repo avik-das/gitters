@@ -5,6 +5,7 @@ extern crate flate2;
 extern crate lazy_static;
 extern crate regex;
 
+pub mod branch;
 pub mod cli;
 pub mod commits;
 pub mod config;
