@@ -52,7 +52,13 @@ fn list_cached_files() -> cli::Result {
 
 fn list_other_files() -> cli::Result {
     let files = try!(cli::wrap_with_status(index::untracked_files(), 2));
-    for file in files {
+
+    let mut sorted_files = files
+        .into_iter()
+        .collect::<Vec<_>>();
+    sorted_files.sort();
+
+    for file in sorted_files {
         println!("{}", try!(path_display(&file)));
     }
 

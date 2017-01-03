@@ -164,7 +164,7 @@ impl Entry {
 // the index and walk the working directly right in this function. In the future, when this is used
 // for "git status", we'll want to read the index and the working directory outside this function
 // so that work can be re-used for multiple operations.
-pub fn untracked_files() -> Result<Vec<PathBuf>, Error> {
+pub fn untracked_files() -> Result<HashSet<PathBuf>, Error> {
     let index = try!(Index::read());
     let tracked_files: HashSet<PathBuf> =
         HashSet::from_iter(index.entries
@@ -180,15 +180,17 @@ pub fn untracked_files() -> Result<Vec<PathBuf>, Error> {
             .unwrap_or(false)
     }
 
-    let all_files = WalkDir::new(".")
+    let all_files = HashSet::from_iter(
+        WalkDir::new(".")
         .into_iter()
         .filter_entry(|e| !is_git_dir(e))
         .filter_map(|e| e.ok())
         .filter_map(|e| fs::canonicalize(e.path()).ok())
-        .filter(|e| !e.is_dir());
+        .filter(|e| !e.is_dir()));
 
-    let untracked = all_files
-        .filter(|file| !tracked_files.contains(file));
+    let untracked: HashSet<PathBuf> = all_files.difference(&tracked_files)
+        .cloned()
+        .collect();
 
-    Ok(untracked.collect())
+    Ok(untracked)
 }
