@@ -2,10 +2,14 @@ extern crate gitters;
 
 extern crate rustc_serialize;
 extern crate docopt;
+#[macro_use]
+extern crate lazy_static;
 
 use docopt::Docopt;
 use gitters::cli;
 use gitters::index;
+use std::env;
+use std::path::{Path, PathBuf};
 
 const USAGE: &'static str = "
 ls-files - Show information about files in the index
@@ -27,10 +31,20 @@ struct Args {
     flag_o: bool,
 }
 
+fn path_display(path: &Path) -> Result<String, cli::Error> {
+    lazy_static! {
+        static ref CURRENT_DIR_PREFIX: PathBuf = env::current_dir().unwrap();
+    }
+
+    let relative_path =
+        try!(cli::wrap_with_status(path.strip_prefix(CURRENT_DIR_PREFIX.as_path()), 2));
+    Ok(relative_path.display().to_string())
+}
+
 fn list_cached_files() -> cli::Result {
     let index = try!(cli::wrap_with_status(index::Index::read(), 2));
     for entry in index.entries {
-        println!("{}", entry.path_name);
+        println!("{}", try!(path_display(&entry.path)));
     }
 
     cli::success()
@@ -39,7 +53,7 @@ fn list_cached_files() -> cli::Result {
 fn list_other_files() -> cli::Result {
     let files = try!(cli::wrap_with_status(index::untracked_files(), 2));
     for file in files {
-        println!("{}", &file.display().to_string()[2..]);
+        println!("{}", try!(path_display(&file)));
     }
 
     cli::success()

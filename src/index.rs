@@ -4,6 +4,7 @@
 use std::collections::HashSet;
 use std::error::Error as StdError;
 use std::fmt;
+use std::fs;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 use std::iter::FromIterator;
@@ -88,7 +89,7 @@ impl Index {
 
 pub struct Entry {
     pub sha1: String,
-    pub path_name: String,
+    pub path: PathBuf,
 }
 
 impl Entry {
@@ -147,9 +148,14 @@ impl Entry {
              .map_err(|_| Error::InvalidEntry(
                      "unable to read entry: path name padding".to_string())));
 
+        let path = try!(
+            fs::canonicalize(path_name.clone())
+            .map_err(|_| Error::InvalidEntry(
+                    format!("unable to parse path name: {}", path_name))));
+
         Ok(Entry {
             sha1: sha1,
-            path_name: path_name,
+            path: path,
         })
     }
 }
@@ -160,10 +166,10 @@ impl Entry {
 // so that work can be re-used for multiple operations.
 pub fn untracked_files() -> Result<Vec<PathBuf>, Error> {
     let index = try!(Index::read());
-    let tracked_files: HashSet<String> =
+    let tracked_files: HashSet<PathBuf> =
         HashSet::from_iter(index.entries
                            .iter()
-                           .map(|e| format!("./{}", e.path_name))
+                           .map(|e| e.path.to_path_buf())
                            .collect::<Vec<_>>());
 
     fn is_git_dir(entry: &DirEntry) -> bool {
@@ -178,11 +184,11 @@ pub fn untracked_files() -> Result<Vec<PathBuf>, Error> {
         .into_iter()
         .filter_entry(|e| !is_git_dir(e))
         .filter_map(|e| e.ok())
-        .map(|e| e.path().to_path_buf())
+        .filter_map(|e| fs::canonicalize(e.path()).ok())
         .filter(|e| !e.is_dir());
 
     let untracked = all_files
-        .filter(|file| !tracked_files.contains(&file.display().to_string()));
+        .filter(|file| !tracked_files.contains(file));
 
     Ok(untracked.collect())
 }
