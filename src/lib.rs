@@ -4,6 +4,7 @@ extern crate flate2;
 #[macro_use]
 extern crate lazy_static;
 extern crate regex;
+extern crate walkdir;
 
 pub mod branch;
 pub mod cli;

@@ -1,11 +1,16 @@
 //! Provides functionality for reading/writing the index file, which contains a list of all the
 //! files tracked by the content-addressable database that is git.
 
-use byteorder::{NetworkEndian, ReadBytesExt};
+use std::collections::HashSet;
 use std::error::Error as StdError;
 use std::fmt;
-use std::io::{BufRead, BufReader, Read};
 use std::fs::File;
+use std::io::{BufRead, BufReader, Read};
+use std::iter::FromIterator;
+use std::path::PathBuf;
+
+use byteorder::{NetworkEndian, ReadBytesExt};
+use walkdir::{DirEntry, WalkDir, WalkDirIterator};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {
@@ -147,4 +152,37 @@ impl Entry {
             path_name: path_name,
         })
     }
+}
+
+// Currently, this function is being used solely for "git ls-files --others", so it's okay to read
+// the index and walk the working directly right in this function. In the future, when this is used
+// for "git status", we'll want to read the index and the working directory outside this function
+// so that work can be re-used for multiple operations.
+pub fn untracked_files() -> Result<Vec<PathBuf>, Error> {
+    let index = try!(Index::read());
+    let tracked_files: HashSet<String> =
+        HashSet::from_iter(index.entries
+                           .iter()
+                           .map(|e| format!("./{}", e.path_name))
+                           .collect::<Vec<_>>());
+
+    fn is_git_dir(entry: &DirEntry) -> bool {
+        entry
+            .file_name()
+            .to_str()
+            .map(|s| s == ".git")
+            .unwrap_or(false)
+    }
+
+    let all_files = WalkDir::new(".")
+        .into_iter()
+        .filter_entry(|e| !is_git_dir(e))
+        .filter_map(|e| e.ok())
+        .map(|e| e.path().to_path_buf())
+        .filter(|e| !e.is_dir());
+
+    let untracked = all_files
+        .filter(|file| !tracked_files.contains(&file.display().to_string()));
+
+    Ok(untracked.collect())
 }
